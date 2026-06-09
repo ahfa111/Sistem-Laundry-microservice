@@ -1,89 +1,277 @@
-from flask import Flask, request, jsonify
-import json
+
 import os
-import uuid
+from flask import Flask, request, jsonify
+import mysql.connector
+from mysql.connector import Error
 
 app = Flask(__name__)
-DB_FILE = 'order_db.json'
 
-def load_data():
-    if not os.path.exists(DB_FILE):
-        return []
+# DB Configuration
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+DB_USER = os.environ.get('DB_USER', 'root')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
+DB_NAME = os.environ.get('DB_NAME', 'order_db')
+
+# Database Connection
+def get_db_connection():
     try:
-        with open(DB_FILE, 'r') as file:
-            return json.load(file)
-    except json.JSONDecodeError:
-        return []
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        return conn
+    except Error as e:
+        print(f"Error connecting to MySQL: {e}")
+        return None
 
-def save_data(data):
-    with open(DB_FILE, 'w') as file:
-        json.dump(data, file, indent=4)
+# Create Table Automatically
+def init_db():
+    conn = get_db_connection()
 
+    if conn:
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                customer_id INT NOT NULL,
+                service_id INT NOT NULL,
+                voucher_id INT,
+                order_date DATE NOT NULL,
+                weight DECIMAL(5,2),
+                total_price DECIMAL(10,2),
+                status VARCHAR(50) DEFAULT 'Menunggu'
+            )
+        ''')
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+# Initialize Database
+init_db()
+
+
+# GET ALL ORDERS
 @app.route('/orders', methods=['GET'])
 def get_orders():
-    orders = load_data()
-    return jsonify({"status": "success", "data": orders}), 200
 
-@app.route('/orders/<order_id>', methods=['GET'])
+    conn = get_db_connection()
+
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute('SELECT * FROM orders')
+
+    orders = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(orders), 200
+
+
+
+# GET ORDER BY ID
+@app.route('/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
-    orders = load_data()
-    order = next((o for o in orders if o.get('id') == order_id), None)
-    if order:
-        return jsonify({"status": "success", "data": order}), 200
-    return jsonify({"status": "error", "message": "Order not found"}), 404
 
+    conn = get_db_connection()
+
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        'SELECT * FROM orders WHERE id = %s',
+        (order_id,)
+    )
+
+    order = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if order:
+        return jsonify(order), 200
+
+    return jsonify({'error': 'Order not found'}), 404
+
+
+
+# CREATE ORDER
 @app.route('/orders', methods=['POST'])
 def create_order():
-    orders = load_data()
-    data = request.json
-    
-    new_order = {
-        "id": str(uuid.uuid4()),
-        "customer_id": data.get('customer_id'),
-        "laundry_id": data.get('laundry_id'),
-        "service_type": data.get('service_type'),
-        "weight": data.get('weight'),
-        "total_price": data.get('total_price'),
-        "status": data.get('status', 'pending'),
-        "order_date": data.get('order_date')
-    }
-    
-    orders.append(new_order)
-    save_data(orders)
-    
-    return jsonify({"status": "success", "data": new_order, "message": "Order created successfully"}), 201
 
-@app.route('/orders/<order_id>', methods=['PUT'])
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Invalid input'}), 400
+
+    conn = get_db_connection()
+
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+
+    sql = '''
+        INSERT INTO orders
+        (
+            customer_id,
+            service_id,
+            voucher_id,
+            order_date,
+            weight,
+            total_price,
+            status
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s,%s)
+    '''
+
+    values = (
+        data['customer_id'],
+        data['service_id'],
+        data.get('voucher_id'),
+        data['order_date'],
+        data['weight'],
+        data['total_price'],
+        data.get('status', 'Menunggu')
+    )
+
+    cursor.execute(sql, values)
+
+    conn.commit()
+
+    new_id = cursor.lastrowid
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        'id': new_id,
+        'customer_id': data['customer_id'],
+        'service_id': data['service_id'],
+        'voucher_id': data.get('voucher_id'),
+        'order_date': data['order_date'],
+        'weight': data['weight'],
+        'total_price': data['total_price'],
+        'status': data.get('status', 'Menunggu')
+    }), 201
+
+
+
+# UPDATE ORDER
+@app.route('/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
-    orders = load_data()
-    data = request.json
-    
-    for idx, order in enumerate(orders):
-        if order.get('id') == order_id:
-            orders[idx].update({
-                "customer_id": data.get('customer_id', order.get('customer_id')),
-                "laundry_id": data.get('laundry_id', order.get('laundry_id')),
-                "service_type": data.get('service_type', order.get('service_type')),
-                "weight": data.get('weight', order.get('weight')),
-                "total_price": data.get('total_price', order.get('total_price')),
-                "status": data.get('status', order.get('status')),
-                "order_date": data.get('order_date', order.get('order_date'))
-            })
-            save_data(orders)
-            return jsonify({"status": "success", "data": orders[idx], "message": "Order updated successfully"}), 200
-            
-    return jsonify({"status": "error", "message": "Order not found"}), 404
 
-@app.route('/orders/<order_id>', methods=['DELETE'])
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Invalid input'}), 400
+
+    conn = get_db_connection()
+
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        'SELECT * FROM orders WHERE id = %s',
+        (order_id,)
+    )
+
+    order = cursor.fetchone()
+
+    if not order:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Order not found'}), 404
+
+    sql = '''
+        UPDATE orders
+        SET
+            customer_id=%s,
+            service_id=%s,
+            voucher_id=%s,
+            order_date=%s,
+            weight=%s,
+            total_price=%s,
+            status=%s
+        WHERE id=%s
+    '''
+
+    values = (
+        data.get('customer_id', order['customer_id']),
+        data.get('service_id', order['service_id']),
+        data.get('voucher_id', order['voucher_id']),
+        data.get('order_date', order['order_date']),
+        data.get('weight', order['weight']),
+        data.get('total_price', order['total_price']),
+        data.get('status', order['status']),
+        order_id
+    )
+
+    cursor.execute(sql, values)
+
+    conn.commit()
+
+    cursor.execute(
+        'SELECT * FROM orders WHERE id = %s',
+        (order_id,)
+    )
+
+    updated_order = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(updated_order), 200
+
+
+
+# DELETE ORDER
+@app.route('/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
-    orders = load_data()
-    new_orders = [o for o in orders if o.get('id') != order_id]
-    
-    if len(orders) == len(new_orders):
-        return jsonify({"status": "error", "message": "Order not found"}), 404
-        
-    save_data(new_orders)
-    return jsonify({"status": "success", "message": "Order deleted successfully"}), 200
+
+    conn = get_db_connection()
+
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        'DELETE FROM orders WHERE id = %s',
+        (order_id,)
+    )
+
+    conn.commit()
+
+    affected_rows = cursor.rowcount
+
+    cursor.close()
+    conn.close()
+
+    if affected_rows == 0:
+        return jsonify({'error': 'Order not found'}), 404
+
+    return jsonify({
+        'message': 'Order deleted successfully'
+    }), 200
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(
+        host='0.0.0.0',
+        port=5002,
+        debug=True
+    )
+
