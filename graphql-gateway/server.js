@@ -37,6 +37,11 @@ const typeDefs = `#graphql
     weight: Float
     total_price: Float
     status: String
+    
+    # --- Integration Fields ---
+    customer: Customer
+    laundryPackage: LaundryPackage
+    voucher: Voucher
   }
 
   type Payment {
@@ -45,6 +50,9 @@ const typeDefs = `#graphql
     amount: Float
     status: String
     payment_method: String
+    
+    # --- Integration Fields ---
+    order: Order
   }
 
   type Voucher {
@@ -114,6 +122,48 @@ const resolvers = {
     voucher: async (_, { id }) => {
       const { data } = await axios.get(`${VOUCHER_URL}/${id}`);
       return data;
+    }
+  },
+  // Resolvers for integrating data on Order type
+  Order: {
+    customer: async (parent) => {
+      if (!parent.customer_id) return null;
+      try {
+        const { data } = await axios.get(`${CUSTOMER_URL}/${parent.customer_id}`);
+        return data;
+      } catch (err) {
+        return null;
+      }
+    },
+    laundryPackage: async (parent) => {
+      if (!parent.service_id) return null;
+      try {
+        const { data } = await axios.get(`${LAUNDRY_URL}/${parent.service_id}`);
+        return data;
+      } catch (err) {
+        return null;
+      }
+    },
+    voucher: async (parent) => {
+      if (!parent.voucher_id) return null;
+      try {
+        const { data } = await axios.get(`${VOUCHER_URL}/${parent.voucher_id}`);
+        return data;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  // Resolvers for integrating data on Payment type
+  Payment: {
+    order: async (parent) => {
+      if (!parent.order_id) return null;
+      try {
+        const { data } = await axios.get(`${ORDER_URL}/${parent.order_id}`);
+        return data.data || data;
+      } catch (err) {
+        return null;
+      }
     }
   }
 };

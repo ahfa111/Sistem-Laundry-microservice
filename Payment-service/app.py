@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 import mysql.connector
 from mysql.connector import Error
+import requests
 
 app = Flask(__name__)
 
@@ -81,6 +82,15 @@ def create_payment():
     data = request.get_json()
     if not data or 'order_id' not in data or 'amount' not in data:
         return jsonify({'error': 'Invalid input, order_id and amount are required'}), 400
+
+    # --- Cross-Service Validations ---
+    try:
+        order_res = requests.get(f"http://order-service:5002/orders/{data['order_id']}")
+        if order_res.status_code != 200:
+            return jsonify({'error': 'Order ID not valid or not found in Order Service'}), 400
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Service communication error: {str(e)}'}), 500
+    # ---------------------------------
         
     conn = get_db_connection()
     if not conn:
@@ -141,6 +151,16 @@ def update_payment(payment_id):
         data.get('payment_method', payment['payment_method']),
         payment_id
     )
+    
+    # --- Cross-Service Validations ---
+    try:
+        if val[0] != payment['order_id']:
+            order_res = requests.get(f"http://order-service:5002/orders/{val[0]}")
+            if order_res.status_code != 200:
+                return jsonify({'error': 'Order ID not valid or not found in Order Service'}), 400
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Service communication error: {str(e)}'}), 500
+    # ---------------------------------
     
     cursor.execute(sql, val)
     conn.commit()
