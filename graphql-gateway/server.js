@@ -20,6 +20,16 @@ const typeDefs = `#graphql
     email: String
     phone: String
     address: String
+    reviews: [CustomerReview]
+    orders: [Order]
+  }
+
+  type CustomerReview {
+    id: ID!
+    customer_id: Int
+    rating: Int
+    review_text: String
+    customer: Customer
   }
 
   type LaundryPackage {
@@ -27,6 +37,21 @@ const typeDefs = `#graphql
     name: String
     description: String
     price: Float
+  }
+
+  type LaundryCategory {
+    id: ID!
+    name: String
+    description: String
+  }
+
+  type OrderItem {
+    id: ID!
+    order_id: Int
+    item_name: String
+    quantity: Int
+    notes: String
+    order: Order
   }
 
   type Order {
@@ -43,6 +68,15 @@ const typeDefs = `#graphql
     customer: Customer
     laundryPackage: LaundryPackage
     voucher: Voucher
+    items: [OrderItem]
+    payment: Payment
+  }
+
+  type PaymentMethod {
+    id: ID!
+    name: String
+    description: String
+    is_active: Boolean
   }
 
   type Payment {
@@ -54,6 +88,15 @@ const typeDefs = `#graphql
     
     # --- Integration Fields ---
     order: Order
+    methodDetail: PaymentMethod
+  }
+
+  type VoucherUsage {
+    id: ID!
+    voucher_id: Int
+    order_id: Int
+    voucher: Voucher
+    order: Order
   }
 
   type Voucher {
@@ -61,23 +104,34 @@ const typeDefs = `#graphql
     code: String
     discount: Float
     valid_until: String
+    usages: [VoucherUsage]
   }
 
   type Query {
     customers: [Customer]
     customer(id: ID!): Customer
+    customerReviews: [CustomerReview]
+    customerReview(id: ID!): CustomerReview
     
     laundryPackages: [LaundryPackage]
     laundryPackage(id: ID!): LaundryPackage
+    laundryCategories: [LaundryCategory]
+    laundryCategory(id: ID!): LaundryCategory
     
     orders: [Order]
     order(id: ID!): Order
+    orderItems: [OrderItem]
+    orderItem(id: ID!): OrderItem
     
     payments: [Payment]
     payment(id: ID!): Payment
+    paymentMethods: [PaymentMethod]
+    paymentMethod(id: ID!): PaymentMethod
     
     vouchers: [Voucher]
     voucher(id: ID!): Voucher
+    voucherUsages: [VoucherUsage]
+    voucherUsage(id: ID!): VoucherUsage
   }
 `;
 
@@ -102,7 +156,7 @@ const resolvers = {
     },
     orders: async () => {
       const { data } = await axios.get(ORDER_URL);
-      return data.data || data; // python flask might wrap in {"status":"success", "data": ...}
+      return data.data || data;
     },
     order: async (_, { id }) => {
       const { data } = await axios.get(`${ORDER_URL}/${id}`);
@@ -123,9 +177,51 @@ const resolvers = {
     voucher: async (_, { id }) => {
       const { data } = await axios.get(`${VOUCHER_URL}/${id}`);
       return data;
+    },
+    customerReviews: async () => {
+      const { data } = await axios.get('http://customer-service:3002/customer-reviews');
+      return data;
+    },
+    customerReview: async (_, { id }) => {
+      const { data } = await axios.get(`http://customer-service:3002/customer-reviews/${id}`);
+      return data;
+    },
+    laundryCategories: async () => {
+      const { data } = await axios.get('http://laundry-service:3001/laundry-categories');
+      return data;
+    },
+    laundryCategory: async (_, { id }) => {
+      const { data } = await axios.get(`http://laundry-service:3001/laundry-categories/${id}`);
+      return data;
+    },
+    orderItems: async () => {
+      const { data } = await axios.get('http://order-service:5002/order-items');
+      return data.data || data;
+    },
+    orderItem: async (_, { id }) => {
+      const { data } = await axios.get(`http://order-service:5002/order-items/${id}`);
+      return data.data || data;
+    },
+    paymentMethods: async () => {
+      const { data } = await axios.get('http://payment-service:5000/payment-methods');
+      return data;
+    },
+    paymentMethod: async (_, { id }) => {
+      const { data } = await axios.get(`http://payment-service:5000/payment-methods/${id}`);
+      return data;
+    },
+    voucherUsages: async () => {
+      const { data } = await axios.get('http://voucher-service:3002/voucher-usages');
+      return data;
+    },
+    voucherUsage: async (_, { id }) => {
+      const { data } = await axios.get(`http://voucher-service:3002/voucher-usages/${id}`);
+      return data;
     }
   },
-  // Resolvers for integrating data on Order type
+  
+  // --- Nested Resolvers ---
+  
   Order: {
     customer: async (parent) => {
       if (!parent.customer_id) return null;
@@ -153,10 +249,112 @@ const resolvers = {
       } catch (err) {
         return null;
       }
+    },
+    items: async (parent) => {
+      try {
+        const { data } = await axios.get('http://order-service:5002/order-items');
+        const items = data.data || data;
+        return items.filter(item => item.order_id === parent.id);
+      } catch (err) {
+        return [];
+      }
+    },
+    payment: async (parent) => {
+      try {
+        const { data } = await axios.get(PAYMENT_URL);
+        return data.find(p => p.order_id === parent.id) || null;
+      } catch (err) {
+        return null;
+      }
     }
   },
-  // Resolvers for integrating data on Payment type
+  
+  OrderItem: {
+    order: async (parent) => {
+      if (!parent.order_id) return null;
+      try {
+        const { data } = await axios.get(`${ORDER_URL}/${parent.order_id}`);
+        return data.data || data;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  
+  Customer: {
+    reviews: async (parent) => {
+      try {
+        const { data } = await axios.get('http://customer-service:3002/customer-reviews');
+        return data.filter(review => review.customer_id === parent.id);
+      } catch (err) {
+        return [];
+      }
+    },
+    orders: async (parent) => {
+      try {
+        const { data } = await axios.get(ORDER_URL);
+        const orders = data.data || data;
+        return orders.filter(order => order.customer_id === parent.id);
+      } catch (err) {
+        return [];
+      }
+    }
+  },
+  
+  CustomerReview: {
+    customer: async (parent) => {
+      if (!parent.customer_id) return null;
+      try {
+        const { data } = await axios.get(`${CUSTOMER_URL}/${parent.customer_id}`);
+        return data;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  
   Payment: {
+    order: async (parent) => {
+      if (!parent.order_id) return null;
+      try {
+        const { data } = await axios.get(`${ORDER_URL}/${parent.order_id}`);
+        return data.data || data;
+      } catch (err) {
+        return null;
+      }
+    },
+    methodDetail: async (parent) => {
+      if (!parent.payment_method) return null;
+      try {
+        const { data } = await axios.get('http://payment-service:5000/payment-methods');
+        return data.find(m => m.name.toLowerCase().includes(parent.payment_method.toLowerCase())) || null;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  
+  Voucher: {
+    usages: async (parent) => {
+      try {
+        const { data } = await axios.get('http://voucher-service:3002/voucher-usages');
+        return data.filter(usage => usage.voucher_id === parent.id);
+      } catch (err) {
+        return [];
+      }
+    }
+  },
+  
+  VoucherUsage: {
+    voucher: async (parent) => {
+      if (!parent.voucher_id) return null;
+      try {
+        const { data } = await axios.get(`${VOUCHER_URL}/${parent.voucher_id}`);
+        return data;
+      } catch (err) {
+        return null;
+      }
+    },
     order: async (parent) => {
       if (!parent.order_id) return null;
       try {
@@ -184,13 +382,6 @@ async function startApolloServer() {
     '/graphql',
     cors(),
     express.json(),
-    // (req, res, next) => {
-    //   const apiKey = req.headers['x-api-key'];
-    //   if (!apiKey || apiKey !== process.env.API_KEY) {
-    //       return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
-    //   }
-    //   next();
-    // },
     expressMiddleware(server)
   );
 
