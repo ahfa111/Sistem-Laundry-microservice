@@ -12,3 +12,15 @@ INSERT INTO vouchers (code, discount, valid_until) VALUES
 ('CUCIMURAH', 5000, '2026-07-31'),
 ('GRATISSETRIKA', 8000, '2026-08-15'),
 ('MERDEKA45', 45000, '2026-08-31');
+
+CREATE TABLE IF NOT EXISTS voucher_usages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    voucher_id INT NOT NULL,
+    order_id INT NOT NULL,
+    used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE
+);
+
+INSERT INTO voucher_usages (voucher_id, order_id) VALUES
+(1, 101),
+(2, 102);

@@ -84,6 +84,68 @@ app.delete('/vouchers/:id', async (req, res) => {
     }
 });
 
+// --- VOUCHER USAGES CRUD ---
+
+app.get('/voucher-usages', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM voucher_usages ORDER BY used_at DESC');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/voucher-usages/:id', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM voucher_usages WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ message: 'Voucher usage not found' });
+        res.json(rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/voucher-usages', async (req, res) => {
+    const { voucher_id, order_id } = req.body;
+    if (!voucher_id || !order_id) return res.status(400).json({ message: 'voucher_id and order_id are required' });
+    try {
+        const [result] = await pool.query(
+            'INSERT INTO voucher_usages (voucher_id, order_id) VALUES (?, ?)',
+            [voucher_id, order_id]
+        );
+        res.status(201).json({ id: result.insertId, voucher_id, order_id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/voucher-usages/:id', async (req, res) => {
+    const { voucher_id, order_id } = req.body;
+    if (!voucher_id || !order_id) return res.status(400).json({ message: 'voucher_id and order_id are required' });
+    try {
+        const [result] = await pool.query(
+            'UPDATE voucher_usages SET voucher_id = ?, order_id = ? WHERE id = ?',
+            [voucher_id, order_id, req.params.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Voucher usage not found' });
+        res.json({ id: parseInt(req.params.id), voucher_id, order_id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/voucher-usages/:id', async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM voucher_usages WHERE id = ?', [req.params.id]);
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Voucher usage not found' });
+        res.json({ message: 'Voucher usage deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/health', (req, res) => res.json({ status: 'ok', service: 'voucher-service' }));
+
 app.listen(port, () => {
     console.log(`VoucherService listening on port ${port}`);
 });

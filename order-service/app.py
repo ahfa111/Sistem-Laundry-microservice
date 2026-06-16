@@ -46,6 +46,17 @@ def init_db():
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                item_name VARCHAR(255) NOT NULL,
+                quantity INT NOT NULL,
+                notes TEXT,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+            )
+        ''')
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -314,6 +325,108 @@ def delete_order(order_id):
         'message': 'Order deleted successfully'
     }), 200
 
+
+# --- ORDER ITEMS CRUD ---
+
+@app.route('/order-items', methods=['GET'])
+def get_order_items():
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute('SELECT * FROM order_items')
+    items = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(items), 200
+
+@app.route('/order-items/<int:item_id>', methods=['GET'])
+def get_order_item(item_id):
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute('SELECT * FROM order_items WHERE id = %s', (item_id,))
+    item = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if item:
+        return jsonify(item), 200
+    return jsonify({'error': 'Order item not found'}), 404
+
+@app.route('/order-items', methods=['POST'])
+def create_order_item():
+    data = request.get_json()
+    if not data or 'order_id' not in data or 'item_name' not in data or 'quantity' not in data:
+        return jsonify({'error': 'order_id, item_name, and quantity are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            'INSERT INTO order_items (order_id, item_name, quantity, notes) VALUES (%s, %s, %s, %s)',
+            (data['order_id'], data['item_name'], data['quantity'], data.get('notes'))
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        return jsonify({'id': new_id, **data}), 201
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/order-items/<int:item_id>', methods=['PUT'])
+def update_order_item(item_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid input'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute('SELECT * FROM order_items WHERE id = %s', (item_id,))
+    item = cursor.fetchone()
+    if not item:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Order item not found'}), 404
+
+    cursor.execute(
+        'UPDATE order_items SET item_name=%s, quantity=%s, notes=%s WHERE id=%s',
+        (
+            data.get('item_name', item['item_name']),
+            data.get('quantity', item['quantity']),
+            data.get('notes', item['notes']),
+            item_id
+        )
+    )
+    conn.commit()
+    
+    cursor.execute('SELECT * FROM order_items WHERE id = %s', (item_id,))
+    updated_item = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return jsonify(updated_item), 200
+
+@app.route('/order-items/<int:item_id>', methods=['DELETE'])
+def delete_order_item(item_id):
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM order_items WHERE id = %s', (item_id,))
+    conn.commit()
+    affected = cursor.rowcount
+    cursor.close()
+    conn.close()
+    if affected == 0:
+        return jsonify({'error': 'Order item not found'}), 404
+    return jsonify({'message': 'Order item deleted successfully'}), 200
 
 if __name__ == '__main__':
     app.run(

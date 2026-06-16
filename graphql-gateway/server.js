@@ -3,6 +3,7 @@ const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const axios = require('axios');
+require('dotenv').config();
 
 // internal service URLs
 const CUSTOMER_URL = 'http://customer-service:3002/customers';
@@ -183,6 +184,13 @@ async function startApolloServer() {
     '/graphql',
     cors(),
     express.json(),
+    // (req, res, next) => {
+    //   const apiKey = req.headers['x-api-key'];
+    //   if (!apiKey || apiKey !== process.env.API_KEY) {
+    //       return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+    //   }
+    //   next();
+    // },
     expressMiddleware(server)
   );
 

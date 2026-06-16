@@ -1,13 +1,15 @@
-FROM python:3.9-slim
+FROM golang:1.22-alpine
 
 WORKDIR /app
 
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
+COPY go.mod ./
+RUN go mod download || true
 
 COPY . .
+RUN go mod tidy
+
+RUN go build -o main .
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["./main"]

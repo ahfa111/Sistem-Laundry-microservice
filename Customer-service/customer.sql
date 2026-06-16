@@ -18,3 +18,16 @@ INSERT INTO customers (name, email, phone, address) VALUES
 ('Siti Rahayu', 'siti@example.com', '082345678901', 'Jl. Sudirman No. 5, Bandung'),
 ('Ahmad Fauzi', 'ahmad@example.com', '083456789012', 'Jl. Gatot Subroto No. 10, Surabaya'),
 ('Dewi Lestari', 'dewi@example.com', '084567890123', 'Jl. Diponegoro No. 3, Yogyakarta');
+
+CREATE TABLE IF NOT EXISTS customer_reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+);
+
+INSERT INTO customer_reviews (customer_id, rating, review_text) VALUES
+(1, 5, 'Pelayanan sangat memuaskan!'),
+(2, 4, 'Bagus, tapi bisa lebih cepat.');
