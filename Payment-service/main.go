@@ -23,14 +23,14 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "payment-service"})
 	})
 
-	// --- PAYMENTS CRUD ---
+	
 	r.GET("/payments", getPayments)
 	r.GET("/payments/:id", getPaymentByID)
 	r.POST("/payments", createPayment)
 	r.PUT("/payments/:id", updatePayment)
 	r.DELETE("/payments/:id", deletePayment)
 
-	// --- PAYMENT METHODS CRUD ---
+
 	r.GET("/payment-methods", getPaymentMethods)
 	r.GET("/payment-methods/:id", getPaymentMethodByID)
 	r.POST("/payment-methods", createPaymentMethod)
@@ -62,7 +62,7 @@ func initDB() {
 		log.Fatal(err)
 	}
 
-	// Create tables
+	
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS payments (
 			id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,7 +89,6 @@ func initDB() {
 	}
 }
 
-// --- Handlers for Payments ---
 
 type Payment struct {
 	ID            int     `json:"id"`
@@ -142,7 +141,7 @@ func createPayment(c *gin.Context) {
 		return
 	}
 
-	// Cross-service validation
+
 	resp, err := http.Get(fmt.Sprintf("http://order-service:5002/orders/%d", p.OrderID))
 	if err != nil || resp.StatusCode != http.StatusOK {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID not valid or not found in Order Service"})
@@ -173,7 +172,6 @@ func updatePayment(c *gin.Context) {
 		return
 	}
 
-	// Fetch existing
 	var existing Payment
 	err := db.QueryRow("SELECT order_id, amount, status, payment_method FROM payments WHERE id = ?", id).
 		Scan(&existing.OrderID, &existing.Amount, &existing.Status, &existing.PaymentMethod)
@@ -234,7 +232,6 @@ func deletePayment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Payment deleted successfully"})
 }
 
-// --- Handlers for Payment Methods ---
 
 type PaymentMethod struct {
 	ID          int    `json:"id"`
