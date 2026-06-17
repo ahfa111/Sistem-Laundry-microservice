@@ -14,6 +14,30 @@ services:
     networks:
       - laundry_network
 
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - laundry_network
+
+  postgres-db:
+    image: postgres:15
+    container_name: postgres_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=order_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - laundry_network
+
   customer-service:
     build: ./Customer-service
     container_name: customer_service
@@ -35,10 +59,9 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - DB_HOST=mysql-db
-      - DB_USER=root
-      - DB_PASSWORD=
-      - DB_NAME=laundry_db
+      - MONGO_URI=mongodb://mongodb:27017/laundry_db
+    depends_on:
+      - mongodb
     networks:
       - laundry_network
 
@@ -49,10 +72,12 @@ services:
     ports:
       - "5002:5002"
     environment:
-      - DB_HOST=mysql-db
-      - DB_USER=root
-      - DB_PASSWORD=
+      - DB_HOST=postgres-db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
       - DB_NAME=order_db
+    depends_on:
+      - postgres-db
     networks:
       - laundry_network
 
@@ -124,3 +149,5 @@ networks:
 
 volumes:
   mysql_data:
+  mongo_data:
+  postgres_data:

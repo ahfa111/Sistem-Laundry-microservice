@@ -1,28 +1,41 @@
 import os
+import json
+from datetime import date
+from decimal import Decimal
 from flask import Flask, request, jsonify
-import mysql.connector
-from mysql.connector import Error
+import psycopg2
+import psycopg2.extras
 import requests
 
+class CustomJSONProvider(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, date):
+            return obj.isoformat()
+        return super().default(obj)
+
 app = Flask(__name__)
+app.json.compact = False
+app.json_encoder = CustomJSONProvider
 
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
-DB_USER = os.environ.get('DB_USER', 'root')
-DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
+DB_USER = os.environ.get('DB_USER', 'postgres')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'order_db')
 
 
 def get_db_connection():
     try:
-        conn = mysql.connector.connect(
+        conn = psycopg2.connect(
             host=DB_HOST,
             user=DB_USER,
             password=DB_PASSWORD,
-            database=DB_NAME
+            dbname=DB_NAME
         )
         return conn
-    except Error as e:
-        print(f"Error connecting to MySQL: {e}")
+    except psycopg2.Error as e:
+        print(f"Error connecting to PostgreSQL: {e}")
         return None
 
 
@@ -34,7 +47,7 @@ def init_db():
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS orders (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 customer_id INT NOT NULL,
                 service_id INT NOT NULL,
                 voucher_id INT,
@@ -47,7 +60,7 @@ def init_db():
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS order_items (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 order_id INT NOT NULL,
                 item_name VARCHAR(255) NOT NULL,
                 quantity INT NOT NULL,
@@ -55,6 +68,21 @@ def init_db():
                 FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
             )
         ''')
+
+        cursor.execute('SELECT COUNT(*) FROM orders')
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('''
+                INSERT INTO orders (customer_id, service_id, voucher_id, order_date, weight, total_price, status) VALUES
+                (1, 1, 1, '2026-06-09', 5.00, 35000.00, 'Menunggu'),
+                (2, 2, NULL, '2026-06-10', 7.50, 52500.00, 'Diproses')
+            ''')
+            
+            cursor.execute('''
+                INSERT INTO order_items (order_id, item_name, quantity, notes) VALUES
+                (1, 'Kemeja Putih', 3, 'Disetrika lipat'),
+                (2, 'Karpet Bulu', 1, 'Cuci kering')
+            ''')
+            print("Inserted dummy data into PostgreSQL")
 
         conn.commit()
         cursor.close()
@@ -64,19 +92,14 @@ def init_db():
 init_db()
 
 
-
 @app.route('/orders', methods=['GET'])
 def get_orders():
-
     conn = get_db_connection()
-
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
-    cursor = conn.cursor(dictionary=True)
-
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute('SELECT * FROM orders')
-
     orders = cursor.fetchall()
 
     cursor.close()
@@ -85,23 +108,14 @@ def get_orders():
     return jsonify(orders), 200
 
 
-
-
 @app.route('/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
-
     conn = get_db_connection()
-
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute(
-        'SELECT * FROM orders WHERE id = %s',
-        (order_id,)
-    )
-
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute('SELECT * FROM orders WHERE id = %s', (order_id,))
     order = cursor.fetchone()
 
     cursor.close()
@@ -113,19 +127,13 @@ def get_order(order_id):
     return jsonify({'error': 'Order not found'}), 404
 
 
-
-
 @app.route('/orders', methods=['POST'])
 def create_order():
-
     data = request.get_json()
-
     if not data:
         return jsonify({'error': 'Invalid input'}), 400
 
-   
     try:
-       
         if 'customer_id' in data:
             cust_res = requests.get(f"http://customer-service:3002/customers/{data['customer_id']}")
             if cust_res.status_code != 200:
@@ -133,7 +141,6 @@ def create_order():
         else:
             return jsonify({'error': 'customer_id is required'}), 400
 
-       
         if 'service_id' in data:
             svc_res = requests.get(f"http://laundry-service:3001/laundry/{data['service_id']}")
             if svc_res.status_code != 200:
@@ -141,37 +148,23 @@ def create_order():
         else:
             return jsonify({'error': 'service_id is required'}), 400
 
-       
         if data.get('voucher_id'):
             vouch_res = requests.get(f"http://voucher-service:3002/vouchers/{data['voucher_id']}")
             if vouch_res.status_code != 200:
                 return jsonify({'error': 'Voucher ID not valid or not found in Voucher Service'}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Service communication error: {str(e)}'}), 500
-   
 
     conn = get_db_connection()
-
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
     cursor = conn.cursor()
-
     sql = '''
         INSERT INTO orders
-        (
-            customer_id,
-            service_id,
-            voucher_id,
-            order_date,
-            weight,
-            total_price,
-            status
-        )
-        VALUES
-        (%s,%s,%s,%s,%s,%s,%s)
+        (customer_id, service_id, voucher_id, order_date, weight, total_price, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
     '''
-
     values = (
         data['customer_id'],
         data['service_id'],
@@ -181,13 +174,9 @@ def create_order():
         data['total_price'],
         data.get('status', 'Menunggu')
     )
-
     cursor.execute(sql, values)
-
+    new_id = cursor.fetchone()[0]
     conn.commit()
-
-    new_id = cursor.lastrowid
-
     cursor.close()
     conn.close()
 
@@ -203,28 +192,18 @@ def create_order():
     }), 201
 
 
-
-
 @app.route('/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
-
     data = request.get_json()
-
     if not data:
         return jsonify({'error': 'Invalid input'}), 400
 
     conn = get_db_connection()
-
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute(
-        'SELECT * FROM orders WHERE id = %s',
-        (order_id,)
-    )
-
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute('SELECT * FROM orders WHERE id = %s', (order_id,))
     order = cursor.fetchone()
 
     if not order:
@@ -234,17 +213,9 @@ def update_order(order_id):
 
     sql = '''
         UPDATE orders
-        SET
-            customer_id=%s,
-            service_id=%s,
-            voucher_id=%s,
-            order_date=%s,
-            weight=%s,
-            total_price=%s,
-            status=%s
+        SET customer_id=%s, service_id=%s, voucher_id=%s, order_date=%s, weight=%s, total_price=%s, status=%s
         WHERE id=%s
     '''
-
     values = (
         data.get('customer_id', order['customer_id']),
         data.get('service_id', order['service_id']),
@@ -256,7 +227,6 @@ def update_order(order_id):
         order_id
     )
 
-  
     try:
         if values[0] != order['customer_id']:
             cust_res = requests.get(f"http://customer-service:3002/customers/{values[0]}")
@@ -274,17 +244,11 @@ def update_order(order_id):
                 return jsonify({'error': 'Voucher ID not valid or not found in Voucher Service'}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Service communication error: {str(e)}'}), 500
-    
 
     cursor.execute(sql, values)
-
     conn.commit()
 
-    cursor.execute(
-        'SELECT * FROM orders WHERE id = %s',
-        (order_id,)
-    )
-
+    cursor.execute('SELECT * FROM orders WHERE id = %s', (order_id,))
     updated_order = cursor.fetchone()
 
     cursor.close()
@@ -293,37 +257,24 @@ def update_order(order_id):
     return jsonify(updated_order), 200
 
 
-
-
 @app.route('/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
-
     conn = get_db_connection()
-
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
     cursor = conn.cursor()
-
-    cursor.execute(
-        'DELETE FROM orders WHERE id = %s',
-        (order_id,)
-    )
-
+    cursor.execute('DELETE FROM orders WHERE id = %s', (order_id,))
     conn.commit()
 
     affected_rows = cursor.rowcount
-
     cursor.close()
     conn.close()
 
     if affected_rows == 0:
         return jsonify({'error': 'Order not found'}), 404
 
-    return jsonify({
-        'message': 'Order deleted successfully'
-    }), 200
-
+    return jsonify({'message': 'Order deleted successfully'}), 200
 
 
 @app.route('/order-items', methods=['GET'])
@@ -331,7 +282,7 @@ def get_order_items():
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute('SELECT * FROM order_items')
     items = cursor.fetchall()
     cursor.close()
@@ -343,7 +294,7 @@ def get_order_item(item_id):
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute('SELECT * FROM order_items WHERE id = %s', (item_id,))
     item = cursor.fetchone()
     cursor.close()
@@ -364,13 +315,13 @@ def create_order_item():
     cursor = conn.cursor()
     try:
         cursor.execute(
-            'INSERT INTO order_items (order_id, item_name, quantity, notes) VALUES (%s, %s, %s, %s)',
+            'INSERT INTO order_items (order_id, item_name, quantity, notes) VALUES (%s, %s, %s, %s) RETURNING id',
             (data['order_id'], data['item_name'], data['quantity'], data.get('notes'))
         )
+        new_id = cursor.fetchone()[0]
         conn.commit()
-        new_id = cursor.lastrowid
         return jsonify({'id': new_id, **data}), 201
-    except Error as e:
+    except psycopg2.Error as e:
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
@@ -385,7 +336,7 @@ def update_order_item(item_id):
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     cursor.execute('SELECT * FROM order_items WHERE id = %s', (item_id,))
     item = cursor.fetchone()
@@ -432,4 +383,3 @@ if __name__ == '__main__':
         port=5002,
         debug=True
     )
-

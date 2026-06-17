@@ -1,34 +1,3 @@
--- 1. Laundry DB
-CREATE DATABASE IF NOT EXISTS laundry_db;
-USE laundry_db;
-
-CREATE TABLE IF NOT EXISTS laundry_packages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    price DECIMAL(10, 2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-INSERT INTO laundry_packages (name, description, price) VALUES
-('Cuci Komplit', 'Cuci kering dan setrika, pakaian siap pakai', 15000),
-('Cuci Kering', 'Hanya cuci dan keringkan, tanpa setrika', 10000),
-('Setrika Saja', 'Hanya setrika pakaian', 8000),
-('Cuci Karpet', 'Cuci karpet per meter persegi', 25000);
-
-CREATE TABLE IF NOT EXISTS laundry_categories (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-INSERT INTO laundry_categories (name, description) VALUES
-('Pakaian', 'Kategori untuk semua jenis pakaian sehari-hari'),
-('Perlengkapan Rumah', 'Kategori untuk sprei, selimut, karpet, dll');
-
--- 2. Customer DB
 CREATE DATABASE IF NOT EXISTS customer_db;
 USE customer_db;
 
@@ -61,40 +30,6 @@ INSERT INTO customer_reviews (customer_id, rating, review_text) VALUES
 (1, 5, 'Pelayanan sangat memuaskan!'),
 (2, 4, 'Bagus, tapi bisa lebih cepat.');
 
--- 3. Order DB
-CREATE DATABASE IF NOT EXISTS order_db;
-USE order_db;
-
-CREATE TABLE IF NOT EXISTS orders (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT NOT NULL,
-    service_id INT NOT NULL,
-    voucher_id INT,
-    order_date DATE NOT NULL,
-    weight DECIMAL(10, 2) NOT NULL,
-    total_price DECIMAL(10, 2) NOT NULL,
-    status VARCHAR(50) DEFAULT 'Menunggu'
-);
-
-INSERT INTO orders (customer_id, service_id, voucher_id, order_date, weight, total_price, status) VALUES
-(1, 1, 1, '2026-06-09', 5.00, 35000.00, 'Menunggu'),
-(2, 2, NULL, '2026-06-10', 7.50, 52500.00, 'Diproses');
-
-CREATE TABLE IF NOT EXISTS order_items (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
-    item_name VARCHAR(255) NOT NULL,
-    quantity INT NOT NULL,
-    notes TEXT,
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
-);
-
-INSERT INTO order_items (order_id, item_name, quantity, notes) VALUES
-(1, 'Kemeja Putih', 3, 'Disetrika lipat'),
-(2, 'Karpet Bulu', 1, 'Cuci kering');
-
-
--- 4. Payment DB
 CREATE DATABASE IF NOT EXISTS payment_db;
 USE payment_db;
 
@@ -123,7 +58,6 @@ INSERT INTO payment_methods (name, description, is_active) VALUES
 ('E-Wallet', 'Pembayaran via GoPay/OVO/Dana', TRUE);
 
 
--- 5. Voucher DB
 CREATE DATABASE IF NOT EXISTS voucher_db;
 USE voucher_db;
 

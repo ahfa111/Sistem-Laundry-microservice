@@ -1,81 +1,118 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
+const mongoose = require('mongoose');
 
 const app = express();
 const port = 3001;
 
 app.use(express.json());
 
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/laundry_db';
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'laundry_db',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+mongoose.connect(mongoUri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => {
+    console.log('Connected to MongoDB');
+    seedData();
+}).catch(err => console.error('MongoDB connection error:', err));
+
+
+const laundryPackageSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    description: String,
+    price: { type: Number, required: true }
+}, { timestamps: true });
+
+const LaundryPackage = mongoose.model('LaundryPackage', laundryPackageSchema);
+
+const laundryCategorySchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    description: String
+}, { timestamps: true });
+
+const LaundryCategory = mongoose.model('LaundryCategory', laundryCategorySchema);
+
+
+async function seedData() {
+    try {
+        const packageCount = await LaundryPackage.countDocuments();
+        if (packageCount === 0) {
+            await LaundryPackage.insertMany([
+                { name: 'Cuci Komplit', description: 'Cuci kering dan setrika, pakaian siap pakai', price: 15000 },
+                { name: 'Cuci Kering', description: 'Hanya cuci dan keringkan, tanpa setrika', price: 10000 },
+                { name: 'Setrika Saja', description: 'Hanya setrika pakaian', price: 8000 },
+                { name: 'Cuci Karpet', description: 'Cuci karpet per meter persegi', price: 25000 }
+            ]);
+            console.log('Seeded laundry packages');
+        }
+
+        const categoryCount = await LaundryCategory.countDocuments();
+        if (categoryCount === 0) {
+            await LaundryCategory.insertMany([
+                { name: 'Pakaian', description: 'Kategori untuk semua jenis pakaian sehari-hari' },
+                { name: 'Perlengkapan Rumah', description: 'Kategori untuk sprei, selimut, karpet, dll' }
+            ]);
+            console.log('Seeded laundry categories');
+        }
+    } catch (error) {
+        console.error('Error seeding data:', error);
+    }
+}
 
 
 app.get('/laundry', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM laundry_packages');
-        res.json(rows);
+        const packages = await LaundryPackage.find();
+        res.json(packages);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 app.get('/laundry/:id', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM laundry_packages WHERE id = ?', [req.params.id]);
-        if (rows.length === 0) {
+        const package = await LaundryPackage.findById(req.params.id);
+        if (!package) {
             return res.status(404).json({ message: 'Laundry package not found' });
         }
-        res.json(rows[0]);
+        res.json(package);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 app.post('/laundry', async (req, res) => {
     const { name, description, price } = req.body;
     try {
-        const [result] = await pool.query(
-            'INSERT INTO laundry_packages (name, description, price) VALUES (?, ?, ?)',
-            [name, description, price]
-        );
-        res.status(201).json({ id: result.insertId, name, description, price });
+        const newPackage = new LaundryPackage({ name, description, price });
+        await newPackage.save();
+        res.status(201).json(newPackage);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 app.put('/laundry/:id', async (req, res) => {
     const { name, description, price } = req.body;
     try {
-        const [result] = await pool.query(
-            'UPDATE laundry_packages SET name = ?, description = ?, price = ? WHERE id = ?',
-            [name, description, price, req.params.id]
+        const updatedPackage = await LaundryPackage.findByIdAndUpdate(
+            req.params.id,
+            { name, description, price },
+            { new: true, runValidators: true }
         );
-        if (result.affectedRows === 0) {
+        if (!updatedPackage) {
             return res.status(404).json({ message: 'Laundry package not found' });
         }
-        res.json({ id: req.params.id, name, description, price });
+        res.json(updatedPackage);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-
 app.delete('/laundry/:id', async (req, res) => {
     try {
-        const [result] = await pool.query('DELETE FROM laundry_packages WHERE id = ?', [req.params.id]);
-        if (result.affectedRows === 0) {
+        const deletedPackage = await LaundryPackage.findByIdAndDelete(req.params.id);
+        if (!deletedPackage) {
             return res.status(404).json({ message: 'Laundry package not found' });
         }
         res.json({ message: 'Laundry package deleted successfully' });
@@ -85,39 +122,33 @@ app.delete('/laundry/:id', async (req, res) => {
 });
 
 
-
-
 app.get('/laundry-categories', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM laundry_categories');
-        res.json(rows);
+        const categories = await LaundryCategory.find();
+        res.json(categories);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 app.get('/laundry-categories/:id', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM laundry_categories WHERE id = ?', [req.params.id]);
-        if (rows.length === 0) {
+        const category = await LaundryCategory.findById(req.params.id);
+        if (!category) {
             return res.status(404).json({ message: 'Category not found' });
         }
-        res.json(rows[0]);
+        res.json(category);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 app.post('/laundry-categories', async (req, res) => {
     const { name, description } = req.body;
     try {
-        const [result] = await pool.query(
-            'INSERT INTO laundry_categories (name, description) VALUES (?, ?)',
-            [name, description]
-        );
-        res.status(201).json({ id: result.insertId, name, description });
+        const newCategory = new LaundryCategory({ name, description });
+        await newCategory.save();
+        res.status(201).json(newCategory);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -126,24 +157,24 @@ app.post('/laundry-categories', async (req, res) => {
 app.put('/laundry-categories/:id', async (req, res) => {
     const { name, description } = req.body;
     try {
-        const [result] = await pool.query(
-            'UPDATE laundry_categories SET name = ?, description = ? WHERE id = ?',
-            [name, description, req.params.id]
+        const updatedCategory = await LaundryCategory.findByIdAndUpdate(
+            req.params.id,
+            { name, description },
+            { new: true, runValidators: true }
         );
-        if (result.affectedRows === 0) {
+        if (!updatedCategory) {
             return res.status(404).json({ message: 'Category not found' });
         }
-        res.json({ id: req.params.id, name, description });
+        res.json(updatedCategory);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-
 app.delete('/laundry-categories/:id', async (req, res) => {
     try {
-        const [result] = await pool.query('DELETE FROM laundry_categories WHERE id = ?', [req.params.id]);
-        if (result.affectedRows === 0) {
+        const deletedCategory = await LaundryCategory.findByIdAndDelete(req.params.id);
+        if (!deletedCategory) {
             return res.status(404).json({ message: 'Category not found' });
         }
         res.json({ message: 'Category deleted successfully' });
