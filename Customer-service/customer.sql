@@ -1,4 +1,4 @@
--- Database: customer_db
+
 
 CREATE DATABASE IF NOT EXISTS customer_db;
 USE customer_db;

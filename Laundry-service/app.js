@@ -6,7 +6,7 @@ const port = 3001;
 
 app.use(express.json());
 
-// Database connection pool
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -17,7 +17,7 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// GET all laundry packages
+
 app.get('/laundry', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM laundry_packages');
@@ -27,7 +27,7 @@ app.get('/laundry', async (req, res) => {
     }
 });
 
-// GET single laundry package
+
 app.get('/laundry/:id', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM laundry_packages WHERE id = ?', [req.params.id]);
@@ -40,7 +40,7 @@ app.get('/laundry/:id', async (req, res) => {
     }
 });
 
-// CREATE laundry package
+
 app.post('/laundry', async (req, res) => {
     const { name, description, price } = req.body;
     try {
@@ -54,7 +54,7 @@ app.post('/laundry', async (req, res) => {
     }
 });
 
-// UPDATE laundry package
+
 app.put('/laundry/:id', async (req, res) => {
     const { name, description, price } = req.body;
     try {
@@ -71,7 +71,7 @@ app.put('/laundry/:id', async (req, res) => {
     }
 });
 
-// DELETE laundry package
+
 app.delete('/laundry/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM laundry_packages WHERE id = ?', [req.params.id]);
@@ -84,9 +84,9 @@ app.delete('/laundry/:id', async (req, res) => {
     }
 });
 
-// --- Laundry Categories CRUD ---
 
-// GET all laundry categories
+
+
 app.get('/laundry-categories', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM laundry_categories');
@@ -96,7 +96,7 @@ app.get('/laundry-categories', async (req, res) => {
     }
 });
 
-// GET single laundry category
+
 app.get('/laundry-categories/:id', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM laundry_categories WHERE id = ?', [req.params.id]);
@@ -109,7 +109,7 @@ app.get('/laundry-categories/:id', async (req, res) => {
     }
 });
 
-// CREATE laundry category
+
 app.post('/laundry-categories', async (req, res) => {
     const { name, description } = req.body;
     try {
@@ -123,7 +123,6 @@ app.post('/laundry-categories', async (req, res) => {
     }
 });
 
-// UPDATE laundry category
 app.put('/laundry-categories/:id', async (req, res) => {
     const { name, description } = req.body;
     try {
@@ -140,7 +139,7 @@ app.put('/laundry-categories/:id', async (req, res) => {
     }
 });
 
-// DELETE laundry category
+
 app.delete('/laundry-categories/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM laundry_categories WHERE id = ?', [req.params.id]);

@@ -2,11 +2,10 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 
 const app = express();
-const port = 3002; // Using 3002 to differentiate from Laundry-service
-
+const port = 3002; 
 app.use(express.json());
 
-// Database connection pool
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -17,7 +16,7 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// GET all vouchers
+
 app.get('/vouchers', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM vouchers');
@@ -27,7 +26,7 @@ app.get('/vouchers', async (req, res) => {
     }
 });
 
-// GET single voucher
+
 app.get('/vouchers/:id', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM vouchers WHERE id = ?', [req.params.id]);
@@ -40,7 +39,7 @@ app.get('/vouchers/:id', async (req, res) => {
     }
 });
 
-// CREATE voucher
+
 app.post('/vouchers', async (req, res) => {
     const { code, discount, valid_until } = req.body;
     try {
@@ -54,7 +53,7 @@ app.post('/vouchers', async (req, res) => {
     }
 });
 
-// UPDATE voucher
+
 app.put('/vouchers/:id', async (req, res) => {
     const { code, discount, valid_until } = req.body;
     try {
@@ -71,7 +70,7 @@ app.put('/vouchers/:id', async (req, res) => {
     }
 });
 
-// DELETE voucher
+
 app.delete('/vouchers/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM vouchers WHERE id = ?', [req.params.id]);
@@ -84,7 +83,7 @@ app.delete('/vouchers/:id', async (req, res) => {
     }
 });
 
-// --- VOUCHER USAGES CRUD ---
+
 
 app.get('/voucher-usages', async (req, res) => {
     try {

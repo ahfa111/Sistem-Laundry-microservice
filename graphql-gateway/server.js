@@ -5,14 +5,14 @@ const cors = require('cors');
 const axios = require('axios');
 require('dotenv').config();
 
-// internal service URLs
+
 const CUSTOMER_URL = 'http://customer-service:3002/customers';
 const LAUNDRY_URL = 'http://laundry-service:3001/laundry';
 const ORDER_URL = 'http://order-service:5002/orders';
 const PAYMENT_URL = 'http://payment-service:5000/payments';
 const VOUCHER_URL = 'http://voucher-service:3002/vouchers';
 
-// GraphQL Schema
+
 const typeDefs = `#graphql
   type Customer {
     id: ID!
@@ -135,7 +135,7 @@ const typeDefs = `#graphql
   }
 `;
 
-// Resolvers
+
 const resolvers = {
   Query: {
     customers: async () => {
@@ -220,7 +220,7 @@ const resolvers = {
     }
   },
   
-  // --- Nested Resolvers ---
+  
   
   Order: {
     customer: async (parent) => {

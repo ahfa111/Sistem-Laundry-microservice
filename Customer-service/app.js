@@ -74,8 +74,6 @@ app.delete('/customers/:id', async (req, res) => {
     }
 });
 
-// --- Customer Reviews CRUD ---
-
 app.get('/customer-reviews', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM customer_reviews ORDER BY created_at DESC');

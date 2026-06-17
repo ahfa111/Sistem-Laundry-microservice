@@ -6,13 +6,12 @@ import requests
 
 app = Flask(__name__)
 
-# DB Configuration
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
 DB_USER = os.environ.get('DB_USER', 'root')
 DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
 DB_NAME = os.environ.get('DB_NAME', 'order_db')
 
-# Database Connection
+
 def get_db_connection():
     try:
         conn = mysql.connector.connect(
@@ -26,7 +25,7 @@ def get_db_connection():
         print(f"Error connecting to MySQL: {e}")
         return None
 
-# Create Table Automatically
+
 def init_db():
     conn = get_db_connection()
 
@@ -61,11 +60,11 @@ def init_db():
         cursor.close()
         conn.close()
 
-# Initialize Database
+
 init_db()
 
 
-# GET ALL ORDERS
+
 @app.route('/orders', methods=['GET'])
 def get_orders():
 
@@ -87,7 +86,7 @@ def get_orders():
 
 
 
-# GET ORDER BY ID
+
 @app.route('/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
 
@@ -115,7 +114,7 @@ def get_order(order_id):
 
 
 
-# CREATE ORDER
+
 @app.route('/orders', methods=['POST'])
 def create_order():
 
@@ -124,9 +123,9 @@ def create_order():
     if not data:
         return jsonify({'error': 'Invalid input'}), 400
 
-    # --- Cross-Service Validations ---
+   
     try:
-        # Validate Customer
+       
         if 'customer_id' in data:
             cust_res = requests.get(f"http://customer-service:3002/customers/{data['customer_id']}")
             if cust_res.status_code != 200:
@@ -134,7 +133,7 @@ def create_order():
         else:
             return jsonify({'error': 'customer_id is required'}), 400
 
-        # Validate Laundry Package
+       
         if 'service_id' in data:
             svc_res = requests.get(f"http://laundry-service:3001/laundry/{data['service_id']}")
             if svc_res.status_code != 200:
@@ -142,14 +141,14 @@ def create_order():
         else:
             return jsonify({'error': 'service_id is required'}), 400
 
-        # Validate Voucher
+       
         if data.get('voucher_id'):
             vouch_res = requests.get(f"http://voucher-service:3002/vouchers/{data['voucher_id']}")
             if vouch_res.status_code != 200:
                 return jsonify({'error': 'Voucher ID not valid or not found in Voucher Service'}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Service communication error: {str(e)}'}), 500
-    # ---------------------------------
+   
 
     conn = get_db_connection()
 
@@ -205,7 +204,7 @@ def create_order():
 
 
 
-# UPDATE ORDER
+
 @app.route('/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
 
@@ -257,7 +256,7 @@ def update_order(order_id):
         order_id
     )
 
-    # --- Cross-Service Validations ---
+  
     try:
         if values[0] != order['customer_id']:
             cust_res = requests.get(f"http://customer-service:3002/customers/{values[0]}")
@@ -275,7 +274,7 @@ def update_order(order_id):
                 return jsonify({'error': 'Voucher ID not valid or not found in Voucher Service'}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Service communication error: {str(e)}'}), 500
-    # ---------------------------------
+    
 
     cursor.execute(sql, values)
 
@@ -295,7 +294,7 @@ def update_order(order_id):
 
 
 
-# DELETE ORDER
+
 @app.route('/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
 
@@ -326,7 +325,6 @@ def delete_order(order_id):
     }), 200
 
 
-# --- ORDER ITEMS CRUD ---
 
 @app.route('/order-items', methods=['GET'])
 def get_order_items():

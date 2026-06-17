@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 
-// Health check
+
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'API Gateway is running' });
 });
@@ -18,7 +18,7 @@ app.use('/customers', createProxyMiddleware({
     target: 'http://customer-service:3002', 
     changeOrigin: true,
     pathRewrite: {
-        '^/customers': '/customers' // Keep the base path
+        '^/customers': '/customers' 
     }
 }));
 
@@ -54,7 +54,7 @@ app.use('/vouchers', createProxyMiddleware({
     }
 }));
 
-// --- Proxy Routes for Secondary Entities ---
+
 
 app.use('/customer-reviews', createProxyMiddleware({ 
     target: 'http://customer-service:3002', 
@@ -96,7 +96,7 @@ app.use('/voucher-usages', createProxyMiddleware({
     }
 }));
 
-// Fallback route
+
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found on API Gateway' });
 });
